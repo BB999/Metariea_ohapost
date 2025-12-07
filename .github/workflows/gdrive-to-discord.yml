@@ -5,17 +5,69 @@ on:
 
 jobs:
   download:
-    uses: ./.github/workflows/gdrive-downloader.yml
-    with:
-      gdrive-path: 'gdrive:metariea/ohatui/'
-      artifact-name: 'gdrive-images'
-    secrets: inherit
+    runs-on: ubuntu-latest
+    outputs:
+      folder-name: ${{ steps.get-folder.outputs.folder-name }}
+      next-number: ${{ steps.get-folder.outputs.next-number }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install rclone
+      run: |
+        curl https://rclone.org/install.sh | sudo bash
+
+    - name: Setup rclone config
+      run: |
+        mkdir -p ~/.config/rclone
+        echo "${{ secrets.RCLONE_CONF_BASE64 }}" | base64 -d > ~/.config/rclone/rclone.conf
+
+    - name: Get next folder
+      id: get-folder
+      run: |
+        # 前回の番号を取得
+        PREV_NUM=$(cat "previous file")
+        echo "Previous number: $PREV_NUM"
+
+        # 次の番号
+        NEXT_NUM=$((PREV_NUM + 1))
+        echo "Next number: $NEXT_NUM"
+
+        # フォルダ一覧を取得して次の番号のフォルダを探す
+        FOLDER=$(rclone lsd "gdrive:metariea/おはツイ投稿前/" | grep "^ *-1 ${NEXT_NUM}:" | awk '{print $NF}')
+
+        if [ -z "$FOLDER" ]; then
+          echo "❌ Folder with number $NEXT_NUM not found"
+          exit 1
+        fi
+
+        echo "📁 Found folder: $FOLDER"
+        echo "folder-name=$FOLDER" >> $GITHUB_OUTPUT
+        echo "next-number=$NEXT_NUM" >> $GITHUB_OUTPUT
+
+    - name: Download images from Google Drive
+      run: |
+        mkdir -p ./images
+        FOLDER="${{ steps.get-folder.outputs.folder-name }}"
+        rclone copy "gdrive:metariea/おはツイ投稿前/$FOLDER/" ./images/
+        echo "📁 Downloaded files:"
+        ls -la ./images/
+
+    - name: Upload images as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: gdrive-images
+        path: ./images/
 
   send-to-discord:
     runs-on: ubuntu-latest
     needs: download
 
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
     - name: Download images artifact
       uses: actions/download-artifact@v4
       with:
@@ -26,6 +78,19 @@ jobs:
       run: |
         echo "📁 Downloaded files:"
         ls -la ./images/
+
+    - name: Update previous number
+      run: |
+        echo "${{ needs.download.outputs.next-number }}" > "previous file"
+        cat "previous file"
+
+    - name: Commit and push updated number
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add "previous file"
+        git commit -m "Update previous number to ${{ needs.download.outputs.next-number }}"
+        git push
 
     - name: Send message to Discord
       run: |
