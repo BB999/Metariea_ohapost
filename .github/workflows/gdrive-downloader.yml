@@ -71,8 +71,12 @@ jobs:
         fi
 
         echo "📁 Found folder: $FOLDER"
-        echo "folder-name=$FOLDER" >> $GITHUB_OUTPUT
-        echo "next-number=$NEXT_NUM" >> $GITHUB_OUTPUT
+        {
+          echo "folder-name<<EOF"
+          echo "$FOLDER"
+          echo "EOF"
+          echo "next-number=$NEXT_NUM"
+        } >> $GITHUB_OUTPUT
 
     - name: Download from Google Drive
       run: |
