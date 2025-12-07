@@ -80,7 +80,8 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git add "previous file"
-        git commit -m "Update previous number to ${{ steps.get-folder.outputs.next-number }}"
+        DATE=$(date +%Y-%m-%d)
+        git commit -m "[$DATE] Update previous number to ${{ steps.get-folder.outputs.next-number }}"
         git push
 
     - name: Download from Google Drive
