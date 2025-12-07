@@ -46,8 +46,16 @@ jobs:
         PREV_NUM=$(cat "previous file")
         echo "Previous number: $PREV_NUM"
 
-        # 次の番号
+        # フォルダの最大数を取得
+        MAX_NUM=$(rclone lsd "${{ inputs.gdrive-base-path }}" | wc -l | tr -d ' ')
+        echo "Max folders: $MAX_NUM"
+
+        # 次の番号（最大数を超えたら1に戻す）
         NEXT_NUM=$((PREV_NUM + 1))
+        if [ $NEXT_NUM -gt $MAX_NUM ]; then
+          NEXT_NUM=1
+          echo "Reached max, resetting to 1"
+        fi
         echo "Next number: $NEXT_NUM"
 
         # フォルダ一覧を取得して次の番号のフォルダを探す
