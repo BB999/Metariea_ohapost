@@ -19,6 +19,12 @@ on:
       next-number:
         description: '次の番号'
         value: ${{ jobs.download-images.outputs.next-number }}
+      image-name:
+        description: '選択した画像名'
+        value: ${{ jobs.download-images.outputs.image-name }}
+      folder-path:
+        description: '画像のあるフォルダパス'
+        value: ${{ jobs.download-images.outputs.folder-path }}
 
 permissions:
   contents: write
@@ -29,6 +35,8 @@ jobs:
     outputs:
       folder-name: ${{ steps.get-folder.outputs.folder-name }}
       next-number: ${{ steps.get-folder.outputs.next-number }}
+      image-name: ${{ steps.select-image.outputs.image-name }}
+      folder-path: ${{ steps.select-image.outputs.folder-path }}
 
     steps:
     - name: Checkout repository
@@ -78,13 +86,37 @@ jobs:
           echo "next-number=$NEXT_NUM"
         } >> $GITHUB_OUTPUT
 
-    - name: Download from Google Drive
+    - name: Select and download random image
+      id: select-image
       run: |
         mkdir -p ./images
         FOLDER="${{ steps.get-folder.outputs.folder-name }}"
-        rclone copy "${{ inputs.gdrive-base-path }}$FOLDER/" ./images/
-        echo "📁 Downloaded files:"
+
+        # フォルダ内のファイル一覧を取得してランダムに1つ選択
+        IMAGE=$(rclone ls "${{ inputs.gdrive-base-path }}$FOLDER/" | awk '{print $2}' | shuf -n 1)
+
+        if [ -z "$IMAGE" ]; then
+          echo "❌ No image found in folder"
+          exit 1
+        fi
+
+        echo "📷 Selected image: $IMAGE"
+
+        # 選択した画像だけダウンロード
+        rclone copy "${{ inputs.gdrive-base-path }}$FOLDER/$IMAGE" ./images/
+
+        echo "📁 Downloaded file:"
         ls -la ./images/
+
+        # 出力
+        {
+          echo "image-name<<EOF"
+          echo "$IMAGE"
+          echo "EOF"
+          echo "folder-path<<EOF2"
+          echo "${{ inputs.gdrive-base-path }}$FOLDER/"
+          echo "EOF2"
+        } >> $GITHUB_OUTPUT
 
     - name: Upload as artifact
       uses: actions/upload-artifact@v4

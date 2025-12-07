@@ -16,6 +16,8 @@ jobs:
     needs: download
     outputs:
       next-number: ${{ needs.download.outputs.next-number }}
+      image-name: ${{ needs.download.outputs.image-name }}
+      folder-path: ${{ needs.download.outputs.folder-path }}
 
     steps:
     - name: Download images artifact
@@ -36,10 +38,9 @@ jobs:
           -d '{"content": "こんにちは"}' \
           "${{ secrets.DISCORD_WEBHOOK_URL }}"
 
-    - name: Send random image to Discord
+    - name: Send image to Discord
       run: |
-        # 画像ファイルをランダムに1枚選択
-        IMAGE=$(find ./images -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" \) | shuf -n 1)
+        IMAGE=$(find ./images -type f | head -n 1)
 
         if [ -n "$IMAGE" ]; then
           echo "📷 Sending: $IMAGE"
@@ -52,9 +53,18 @@ jobs:
           exit 1
         fi
 
+  move-image:
+    uses: ./.github/workflows/gdrive-mover.yml
+    needs: send-to-discord
+    with:
+      source-path: ${{ needs.send-to-discord.outputs.folder-path }}
+      image-name: ${{ needs.send-to-discord.outputs.image-name }}
+      dest-path: 'gdrive:metariea/おはツイ投稿済み/'
+    secrets: inherit
+
   commit-push:
     uses: ./.github/workflows/commit-pusher.yml
-    needs: send-to-discord
+    needs: [send-to-discord, move-image]
     with:
       next-number: ${{ needs.send-to-discord.outputs.next-number }}
     secrets: inherit

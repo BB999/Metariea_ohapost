@@ -1,0 +1,46 @@
+name: Google Drive Mover
+
+on:
+  workflow_call:
+    inputs:
+      source-path:
+        description: '移動元のフォルダパス'
+        required: true
+        type: string
+      image-name:
+        description: '移動する画像名'
+        required: true
+        type: string
+      dest-path:
+        description: '移動先のフォルダパス'
+        required: true
+        type: string
+
+jobs:
+  move-image:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Install rclone
+      run: |
+        curl https://rclone.org/install.sh | sudo bash
+
+    - name: Setup rclone config
+      run: |
+        mkdir -p ~/.config/rclone
+        echo "${{ secrets.RCLONE_CONF_BASE64 }}" | base64 -d > ~/.config/rclone/rclone.conf
+
+    - name: Move image to destination
+      run: |
+        DATE=$(date +%Y-%m-%d)
+        SOURCE="${{ inputs.source-path }}${{ inputs.image-name }}"
+        DEST="${{ inputs.dest-path }}${DATE}_${{ inputs.image-name }}"
+
+        echo "📦 Moving: $SOURCE"
+        echo "📍 To: $DEST"
+
+        # コピーしてから削除（moveがうまくいかない場合の対策）
+        rclone copyto "$SOURCE" "$DEST"
+        rclone delete "$SOURCE"
+
+        echo "✅ Done!"
