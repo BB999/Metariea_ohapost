@@ -35,7 +35,7 @@ jobs:
         echo "Next number: $NEXT_NUM"
 
         # フォルダ一覧を取得して次の番号のフォルダを探す
-        FOLDER=$(rclone lsd "gdrive:metariea/おはツイ投稿前/" | grep "^ *-1 ${NEXT_NUM}:" | awk '{print $NF}')
+        FOLDER=$(rclone lsd "gdrive:metariea/おはツイ投稿前/" | grep "${NEXT_NUM}:" | awk '{print $NF}')
 
         if [ -z "$FOLDER" ]; then
           echo "❌ Folder with number $NEXT_NUM not found"
