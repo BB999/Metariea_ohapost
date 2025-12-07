@@ -1,4 +1,4 @@
-name: Update Previous Number
+name: Commit Pusher
 
 on:
   workflow_call:

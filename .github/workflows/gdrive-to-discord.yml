@@ -52,8 +52,8 @@ jobs:
           exit 1
         fi
 
-  update-number:
-    uses: ./.github/workflows/update-previous-number.yml
+  commit-push:
+    uses: ./.github/workflows/commit-pusher.yml
     needs: send-to-discord
     with:
       next-number: ${{ needs.send-to-discord.outputs.next-number }}
