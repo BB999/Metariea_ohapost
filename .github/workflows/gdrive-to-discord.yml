@@ -1,0 +1,47 @@
+name: Google Drive to Discord
+
+on:
+  workflow_dispatch:  # 手動実行用
+
+jobs:
+  download:
+    uses: ./.github/workflows/gdrive-downloader.yml
+    with:
+      gdrive-path: 'gdrive:metariea/ohatui/'
+      artifact-name: 'gdrive-images'
+    secrets: inherit
+
+  send-to-discord:
+    runs-on: ubuntu-latest
+    needs: download
+
+    steps:
+    - name: Download images artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: gdrive-images
+        path: ./images/
+
+    - name: Check downloaded files
+      run: |
+        echo "📁 Downloaded files:"
+        ls -la ./images/
+
+    - name: Send message to Discord
+      run: |
+        curl -X POST \
+          -H "Content-Type: application/json" \
+          -d '{"content": "こんにちは"}' \
+          "${{ secrets.DISCORD_WEBHOOK_URL }}"
+
+    - name: Send images to Discord
+      run: |
+        for file in ./images/*.png ./images/*.jpg ./images/*.jpeg ./images/*.gif; do
+          if [ -f "$file" ]; then
+            echo "📷 Sending: $file"
+            curl -X POST \
+              -F "file=@$file" \
+              "${{ secrets.DISCORD_WEBHOOK_URL }}"
+          fi
+        done
+        echo "✅ Done!"

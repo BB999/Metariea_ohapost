@@ -1,0 +1,41 @@
+name: Google Drive Downloader
+
+on:
+  workflow_call:
+    inputs:
+      gdrive-path:
+        description: 'Google Driveのパス'
+        required: true
+        type: string
+      artifact-name:
+        description: 'アーティファクト名'
+        required: false
+        type: string
+        default: 'gdrive-images'
+
+jobs:
+  download-images:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Install rclone
+      run: |
+        curl https://rclone.org/install.sh | sudo bash
+
+    - name: Setup rclone config
+      run: |
+        mkdir -p ~/.config/rclone
+        echo "${{ secrets.RCLONE_CONF_BASE64 }}" | base64 -d > ~/.config/rclone/rclone.conf
+
+    - name: Download from Google Drive
+      run: |
+        mkdir -p ./images
+        rclone copy "${{ inputs.gdrive-path }}" ./images/
+        echo "📁 Downloaded files:"
+        ls -la ./images/
+
+    - name: Upload as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ./images/
