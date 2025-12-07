@@ -63,7 +63,7 @@ jobs:
         echo "Next number: $NEXT_NUM"
 
         # フォルダ一覧を取得して次の番号のフォルダを探す
-        FOLDER=$(rclone lsd "${{ inputs.gdrive-base-path }}" | grep "${NEXT_NUM}:" | awk '{print $NF}')
+        FOLDER=$(rclone lsd "${{ inputs.gdrive-base-path }}" | awk '{print $NF}' | grep "^${NEXT_NUM}:" | head -n 1)
 
         if [ -z "$FOLDER" ]; then
           echo "❌ Folder with number $NEXT_NUM not found"
