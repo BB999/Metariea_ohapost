@@ -34,14 +34,18 @@ jobs:
           -d '{"content": "こんにちは"}' \
           "${{ secrets.DISCORD_WEBHOOK_URL }}"
 
-    - name: Send images to Discord
+    - name: Send random image to Discord
       run: |
-        for file in ./images/*.png ./images/*.jpg ./images/*.jpeg ./images/*.gif; do
-          if [ -f "$file" ]; then
-            echo "📷 Sending: $file"
-            curl -X POST \
-              -F "file=@$file" \
-              "${{ secrets.DISCORD_WEBHOOK_URL }}"
-          fi
-        done
-        echo "✅ Done!"
+        # 画像ファイルをランダムに1枚選択
+        IMAGE=$(find ./images -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" \) | shuf -n 1)
+
+        if [ -n "$IMAGE" ]; then
+          echo "📷 Sending: $IMAGE"
+          curl -X POST \
+            -F "file=@$IMAGE" \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}"
+          echo "✅ Done!"
+        else
+          echo "❌ No image found"
+          exit 1
+        fi
