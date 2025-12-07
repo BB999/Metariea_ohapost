@@ -3,8 +3,8 @@ name: Google Drive Downloader
 on:
   workflow_call:
     inputs:
-      gdrive-path:
-        description: 'Google Driveのパス'
+      gdrive-base-path:
+        description: 'Google Driveのベースパス'
         required: true
         type: string
       artifact-name:
@@ -12,12 +12,24 @@ on:
         required: false
         type: string
         default: 'gdrive-images'
+    outputs:
+      folder-name:
+        description: '取得したフォルダ名'
+        value: ${{ jobs.download-images.outputs.folder-name }}
+
+permissions:
+  contents: write
 
 jobs:
   download-images:
     runs-on: ubuntu-latest
+    outputs:
+      folder-name: ${{ steps.get-folder.outputs.folder-name }}
 
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
     - name: Install rclone
       run: |
         curl https://rclone.org/install.sh | sudo bash
@@ -27,10 +39,47 @@ jobs:
         mkdir -p ~/.config/rclone
         echo "${{ secrets.RCLONE_CONF_BASE64 }}" | base64 -d > ~/.config/rclone/rclone.conf
 
+    - name: Get next folder
+      id: get-folder
+      run: |
+        # 前回の番号を取得
+        PREV_NUM=$(cat "previous file")
+        echo "Previous number: $PREV_NUM"
+
+        # 次の番号
+        NEXT_NUM=$((PREV_NUM + 1))
+        echo "Next number: $NEXT_NUM"
+
+        # フォルダ一覧を取得して次の番号のフォルダを探す
+        FOLDER=$(rclone lsd "${{ inputs.gdrive-base-path }}" | grep "${NEXT_NUM}:" | awk '{print $NF}')
+
+        if [ -z "$FOLDER" ]; then
+          echo "❌ Folder with number $NEXT_NUM not found"
+          exit 1
+        fi
+
+        echo "📁 Found folder: $FOLDER"
+        echo "folder-name=$FOLDER" >> $GITHUB_OUTPUT
+        echo "next-number=$NEXT_NUM" >> $GITHUB_OUTPUT
+
+    - name: Update previous number
+      run: |
+        echo "${{ steps.get-folder.outputs.next-number }}" > "previous file"
+        cat "previous file"
+
+    - name: Commit and push updated number
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add "previous file"
+        git commit -m "Update previous number to ${{ steps.get-folder.outputs.next-number }}"
+        git push
+
     - name: Download from Google Drive
       run: |
         mkdir -p ./images
-        rclone copy "${{ inputs.gdrive-path }}" ./images/
+        FOLDER="${{ steps.get-folder.outputs.folder-name }}"
+        rclone copy "${{ inputs.gdrive-base-path }}$FOLDER/" ./images/
         echo "📁 Downloaded files:"
         ls -la ./images/
 
