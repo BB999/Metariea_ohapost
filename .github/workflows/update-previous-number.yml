@@ -1,0 +1,34 @@
+name: Update Previous Number
+
+on:
+  workflow_call:
+    inputs:
+      next-number:
+        description: '更新する番号'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  update-number:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Update previous number
+      run: |
+        echo "${{ inputs.next-number }}" > "previous file"
+        cat "previous file"
+
+    - name: Commit and push
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add "previous file"
+        DATE=$(date +%Y-%m-%d)
+        git commit -m "[$DATE] Update previous number to ${{ inputs.next-number }}"
+        git push

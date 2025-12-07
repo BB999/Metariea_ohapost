@@ -16,6 +16,9 @@ on:
       folder-name:
         description: '取得したフォルダ名'
         value: ${{ jobs.download-images.outputs.folder-name }}
+      next-number:
+        description: '次の番号'
+        value: ${{ jobs.download-images.outputs.next-number }}
 
 permissions:
   contents: write
@@ -25,6 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       folder-name: ${{ steps.get-folder.outputs.folder-name }}
+      next-number: ${{ steps.get-folder.outputs.next-number }}
 
     steps:
     - name: Checkout repository
@@ -69,20 +73,6 @@ jobs:
         echo "📁 Found folder: $FOLDER"
         echo "folder-name=$FOLDER" >> $GITHUB_OUTPUT
         echo "next-number=$NEXT_NUM" >> $GITHUB_OUTPUT
-
-    - name: Update previous number
-      run: |
-        echo "${{ steps.get-folder.outputs.next-number }}" > "previous file"
-        cat "previous file"
-
-    - name: Commit and push updated number
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add "previous file"
-        DATE=$(date +%Y-%m-%d)
-        git commit -m "[$DATE] Update previous number to ${{ steps.get-folder.outputs.next-number }}"
-        git push
 
     - name: Download from Google Drive
       run: |
