@@ -26,7 +26,6 @@ jobs:
       source-path: ${{ needs.download.outputs.folder-path }}
       image-name: ${{ needs.download.outputs.image-name }}
       dest-path: 'gdrive:metariea/おはツイ投稿済み/'
-      next-number: ${{ needs.download.outputs.next-number }}
     secrets: inherit
 
   send-to-discord:

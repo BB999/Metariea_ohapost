@@ -19,15 +19,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Download updated previous file
-      uses: actions/download-artifact@v4
-      with:
-        name: updated-previous-file
-        path: ./
-
-    - name: Verify file
+    - name: Update previous number
       run: |
-        echo "📄 previous file の内容:"
+        echo "${{ inputs.next-number }}" > "previous file"
         cat "previous file"
 
     - name: Commit and push
