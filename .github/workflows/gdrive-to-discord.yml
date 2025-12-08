@@ -1,7 +1,13 @@
 name: Google Drive to Discord
 
 on:
-  workflow_dispatch:  # 手動実行用
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: 'デバッグモード（X投稿をスキップ）'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   download:
@@ -14,6 +20,7 @@ jobs:
   post-to-x:
     uses: ./.github/workflows/x-poster.yml
     needs: download
+    if: ${{ inputs.debug != true }}
     with:
       tweet-text: 'こんにちは'
       image-file: 'images/${{ needs.download.outputs.image-name }}'
@@ -22,6 +29,7 @@ jobs:
   move-and-update:
     uses: ./.github/workflows/gdrive-mover.yml
     needs: [download, post-to-x]
+    if: always() && needs.download.result == 'success' && (needs.post-to-x.result == 'success' || needs.post-to-x.result == 'skipped')
     with:
       source-path: ${{ needs.download.outputs.folder-path }}
       image-name: ${{ needs.download.outputs.image-name }}
@@ -69,7 +77,7 @@ jobs:
           "${{ secrets.DISCORD_WEBHOOK_URL }}"
 
     - name: Send success message to Discord
-      if: needs.download.result == 'success' && needs.post-to-x.result == 'success' && needs.move-and-update.result == 'success'
+      if: needs.download.result == 'success' && (needs.post-to-x.result == 'success' || needs.post-to-x.result == 'skipped') && needs.move-and-update.result == 'success'
       run: |
         RESULT=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
           -H "Content-Type: application/json" \
@@ -87,7 +95,7 @@ jobs:
         fi
 
     - name: Send image to Discord
-      if: needs.download.result == 'success' && needs.post-to-x.result == 'success' && needs.move-and-update.result == 'success'
+      if: needs.download.result == 'success' && (needs.post-to-x.result == 'success' || needs.post-to-x.result == 'skipped') && needs.move-and-update.result == 'success'
       run: |
         IMAGE=$(find ./images -type f 2>/dev/null | head -n 1)
 
@@ -115,11 +123,17 @@ jobs:
         fi
 
     - name: Send completion report to Discord
-      if: needs.download.result == 'success' && needs.post-to-x.result == 'success' && needs.move-and-update.result == 'success'
+      if: needs.download.result == 'success' && (needs.post-to-x.result == 'success' || needs.post-to-x.result == 'skipped') && needs.move-and-update.result == 'success'
+      env:
+        POST_TO_X_RESULT: ${{ needs.post-to-x.result }}
       run: |
         REPORT="✅ **処理完了レポート**\n\n"
         REPORT="${REPORT}📥 ダウンロード: 成功\n"
-        REPORT="${REPORT}🐦 X投稿: 成功\n"
+        if [ "$POST_TO_X_RESULT" == "skipped" ]; then
+          REPORT="${REPORT}🐦 X投稿: スキップ（デバッグモード）\n"
+        else
+          REPORT="${REPORT}🐦 X投稿: 成功\n"
+        fi
         REPORT="${REPORT}📁 画像移動: 成功\n"
         REPORT="${REPORT}🔢 番号更新: 成功\n"
         REPORT="${REPORT}💬 Discord送信: 成功"
