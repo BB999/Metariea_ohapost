@@ -20,17 +20,12 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: write
 
 jobs:
   move-image:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
     - name: Install rclone
       run: |
         curl https://rclone.org/install.sh | sudo bash
@@ -59,13 +54,10 @@ jobs:
       run: |
         echo "${{ inputs.next-number }}" > "previous file"
         cat "previous file"
-
-    - name: Commit and push
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add "previous file"
-        DATE=$(date +%Y-%m-%d)
-        git commit -m "[$DATE] Update previous number to ${{ inputs.next-number }}"
-        git push
         echo "✅ 番号更新完了!"
+
+    - name: Upload updated file as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: updated-previous-file
+        path: "previous file"

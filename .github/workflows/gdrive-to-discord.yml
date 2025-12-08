@@ -129,3 +129,11 @@ jobs:
           -H "Content-Type: application/json" \
           -d "{\"content\": \"$REPORT\"}" \
           "${{ secrets.DISCORD_WEBHOOK_URL }}"
+
+  commit-push:
+    uses: ./.github/workflows/commit-pusher.yml
+    needs: [download, send-to-discord]
+    if: needs.send-to-discord.result == 'success'
+    with:
+      next-number: ${{ needs.download.outputs.next-number }}
+    secrets: inherit
