@@ -100,6 +100,21 @@ jobs:
         IMAGE=$(find ./images -type f 2>/dev/null | head -n 1)
 
         if [ -n "$IMAGE" ]; then
+          echo "📷 Found: $IMAGE"
+          FILE_SIZE=$(stat -c%s "$IMAGE")
+          echo "📊 ファイルサイズ: $FILE_SIZE bytes"
+
+          # 8MB（8388608 bytes）を超える場合は圧縮
+          if [ "$FILE_SIZE" -gt 8388608 ]; then
+            echo "⚠️ ファイルが8MBを超えているため圧縮します"
+            sudo apt-get install -y imagemagick > /dev/null 2>&1
+            COMPRESSED_IMAGE="./images/compressed_$(basename "$IMAGE" | sed 's/\.[^.]*$//').jpg"
+            convert "$IMAGE" -resize 1920x1080\> -quality 85 "$COMPRESSED_IMAGE"
+            IMAGE="$COMPRESSED_IMAGE"
+            NEW_SIZE=$(stat -c%s "$IMAGE")
+            echo "📊 圧縮後サイズ: $NEW_SIZE bytes"
+          fi
+
           echo "📷 Sending: $IMAGE"
           RESULT=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
             -F "file=@$IMAGE" \
@@ -111,7 +126,7 @@ jobs:
             echo "❌ 画像送信失敗: HTTP $RESULT"
             curl -X POST \
               -H "Content-Type: application/json" \
-              -d '{"content": "⚠️ 画像送信でエラーが発生しました"}' \
+              -d '{"content": "⚠️ 画像送信でエラーが発生しました（HTTP '$RESULT'）"}' \
               "${{ secrets.DISCORD_WEBHOOK_URL }}"
           fi
         else
