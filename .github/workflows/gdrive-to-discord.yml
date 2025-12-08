@@ -145,8 +145,8 @@ jobs:
 
   commit-push:
     uses: ./.github/workflows/commit-pusher.yml
-    needs: [download, send-to-discord]
-    if: needs.send-to-discord.result == 'success'
+    needs: [download, post-to-x, move-and-update, send-to-discord]
+    if: always() && needs.download.result == 'success' && (needs.post-to-x.result == 'success' || needs.post-to-x.result == 'skipped') && needs.move-and-update.result == 'success'
     with:
       next-number: ${{ needs.download.outputs.next-number }}
     secrets: inherit
