@@ -11,13 +11,29 @@ jobs:
       artifact-name: 'gdrive-images'
     secrets: inherit
 
+  post-to-x:
+    uses: ./.github/workflows/x-poster.yml
+    needs: download
+    with:
+      tweet-text: 'こんにちは'
+      image-file: 'images/${{ needs.download.outputs.image-name }}'
+    secrets: inherit
+
+  move-image:
+    uses: ./.github/workflows/gdrive-mover.yml
+    needs: [download, post-to-x]
+    with:
+      source-path: ${{ needs.download.outputs.folder-path }}
+      image-name: ${{ needs.download.outputs.image-name }}
+      dest-path: 'gdrive:metariea/おはツイ投稿済み/'
+    secrets: inherit
+
   send-to-discord:
     runs-on: ubuntu-latest
-    needs: download
+    needs: [download, post-to-x, move-image]
+    if: always()
     outputs:
       next-number: ${{ needs.download.outputs.next-number }}
-      image-name: ${{ needs.download.outputs.image-name }}
-      folder-path: ${{ needs.download.outputs.folder-path }}
 
     steps:
     - name: Download images artifact
@@ -25,46 +41,99 @@ jobs:
       with:
         name: gdrive-images
         path: ./images/
+      continue-on-error: true
 
     - name: Check downloaded files
       run: |
         echo "📁 Downloaded files:"
-        ls -la ./images/
+        ls -la ./images/ || echo "画像フォルダなし"
 
-    - name: Send message to Discord
+    - name: Report errors to Discord
+      if: needs.download.result == 'failure' || needs.post-to-x.result == 'failure' || needs.move-image.result == 'failure'
       run: |
+        ERROR_MSG="❌ **エラーが発生しました**\n\n"
+
+        if [ "${{ needs.download.result }}" == "failure" ]; then
+          ERROR_MSG="${ERROR_MSG}🔴 **ダウンロード失敗**: Google Driveからの画像取得に失敗しました\n"
+        fi
+
+        if [ "${{ needs.post-to-x.result }}" == "failure" ]; then
+          ERROR_MSG="${ERROR_MSG}🔴 **X投稿失敗**: Xへの投稿に失敗しました\n"
+        fi
+
+        if [ "${{ needs.move-image.result }}" == "failure" ]; then
+          ERROR_MSG="${ERROR_MSG}🔴 **画像移動失敗**: 投稿済みフォルダへの移動に失敗しました\n"
+        fi
+
         curl -X POST \
           -H "Content-Type: application/json" \
-          -d '{"content": "こんにちは"}' \
+          -d "{\"content\": \"$ERROR_MSG\"}" \
           "${{ secrets.DISCORD_WEBHOOK_URL }}"
 
-    - name: Send image to Discord
+    - name: Send success message to Discord
+      if: needs.download.result == 'success' && needs.post-to-x.result == 'success' && needs.move-image.result == 'success'
       run: |
-        IMAGE=$(find ./images -type f | head -n 1)
+        RESULT=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+          -H "Content-Type: application/json" \
+          -d '{"content": "こんにちは"}' \
+          "${{ secrets.DISCORD_WEBHOOK_URL }}")
+
+        if [ "$RESULT" == "204" ] || [ "$RESULT" == "200" ]; then
+          echo "✅ メッセージ送信成功"
+        else
+          echo "❌ メッセージ送信失敗: HTTP $RESULT"
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"content": "⚠️ メッセージ送信でエラーが発生しました"}' \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}"
+        fi
+
+    - name: Send image to Discord
+      if: needs.download.result == 'success' && needs.post-to-x.result == 'success' && needs.move-image.result == 'success'
+      run: |
+        IMAGE=$(find ./images -type f 2>/dev/null | head -n 1)
 
         if [ -n "$IMAGE" ]; then
           echo "📷 Sending: $IMAGE"
-          curl -X POST \
+          RESULT=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
             -F "file=@$IMAGE" \
-            "${{ secrets.DISCORD_WEBHOOK_URL }}"
-          echo "✅ Done!"
+            "${{ secrets.DISCORD_WEBHOOK_URL }}")
+
+          if [ "$RESULT" == "200" ]; then
+            echo "✅ 画像送信成功"
+          else
+            echo "❌ 画像送信失敗: HTTP $RESULT"
+            curl -X POST \
+              -H "Content-Type: application/json" \
+              -d '{"content": "⚠️ 画像送信でエラーが発生しました"}' \
+              "${{ secrets.DISCORD_WEBHOOK_URL }}"
+          fi
         else
           echo "❌ No image found"
-          exit 1
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"content": "⚠️ 画像ファイルが見つかりませんでした"}' \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}"
         fi
 
-  move-image:
-    uses: ./.github/workflows/gdrive-mover.yml
-    needs: send-to-discord
-    with:
-      source-path: ${{ needs.send-to-discord.outputs.folder-path }}
-      image-name: ${{ needs.send-to-discord.outputs.image-name }}
-      dest-path: 'gdrive:metariea/おはツイ投稿済み/'
-    secrets: inherit
+    - name: Send completion report to Discord
+      if: needs.download.result == 'success' && needs.post-to-x.result == 'success' && needs.move-image.result == 'success'
+      run: |
+        REPORT="✅ **処理完了レポート**\n\n"
+        REPORT="${REPORT}📥 ダウンロード: 成功\n"
+        REPORT="${REPORT}🐦 X投稿: 成功\n"
+        REPORT="${REPORT}📁 画像移動: 成功\n"
+        REPORT="${REPORT}💬 Discord送信: 成功"
+
+        curl -X POST \
+          -H "Content-Type: application/json" \
+          -d "{\"content\": \"$REPORT\"}" \
+          "${{ secrets.DISCORD_WEBHOOK_URL }}"
 
   commit-push:
     uses: ./.github/workflows/commit-pusher.yml
-    needs: [send-to-discord, move-image]
+    needs: send-to-discord
+    if: needs.send-to-discord.result == 'success'
     with:
       next-number: ${{ needs.send-to-discord.outputs.next-number }}
     secrets: inherit
