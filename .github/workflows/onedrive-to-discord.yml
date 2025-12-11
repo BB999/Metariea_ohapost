@@ -1,4 +1,4 @@
-name: Google Drive to Discord
+name: OneDrive to Discord
 
 on:
   workflow_dispatch:
@@ -11,10 +11,10 @@ on:
 
 jobs:
   download:
-    uses: ./.github/workflows/gdrive-downloader.yml
+    uses: ./.github/workflows/onedrive-downloader.yml
     with:
-      gdrive-base-path: 'gdrive:metariea/おはツイ投稿前/'
-      artifact-name: 'gdrive-images'
+      base-path: 'onedrive:XRC_仮想大学校/おはツイ/'
+      artifact-name: 'onedrive-images'
     secrets: inherit
 
   post-to-x:
@@ -22,18 +22,18 @@ jobs:
     needs: download
     if: ${{ inputs.debug != true }}
     with:
-      tweet-text: 'こんにちは'
+      tweet-text: ${{ needs.download.outputs.greeting-message }}
       image-file: 'images/${{ needs.download.outputs.image-name }}'
     secrets: inherit
 
   move-and-update:
-    uses: ./.github/workflows/gdrive-mover.yml
+    uses: ./.github/workflows/onedrive-mover.yml
     needs: [download, post-to-x]
     if: always() && needs.download.result == 'success' && (needs.post-to-x.result == 'success' || needs.post-to-x.result == 'skipped')
     with:
       source-path: ${{ needs.download.outputs.folder-path }}
       image-name: ${{ needs.download.outputs.image-name }}
-      dest-path: 'gdrive:metariea/おはツイ投稿済み/'
+      dest-folder: '投稿済み/'
     secrets: inherit
 
   send-to-discord:
@@ -45,7 +45,7 @@ jobs:
     - name: Download images artifact
       uses: actions/download-artifact@v4
       with:
-        name: gdrive-images
+        name: onedrive-images
         path: ./images/
       continue-on-error: true
 
@@ -60,7 +60,7 @@ jobs:
         ERROR_MSG="❌ **エラーが発生しました**\n\n"
 
         if [ "${{ needs.download.result }}" == "failure" ]; then
-          ERROR_MSG="${ERROR_MSG}🔴 **ダウンロード失敗**: Google Driveからの画像取得に失敗しました\n"
+          ERROR_MSG="${ERROR_MSG}🔴 **ダウンロード失敗**: OneDriveからの画像取得に失敗しました\n"
         fi
 
         if [ "${{ needs.post-to-x.result }}" == "failure" ]; then
@@ -78,10 +78,12 @@ jobs:
 
     - name: Send success message to Discord
       if: needs.download.result == 'success' && (needs.post-to-x.result == 'success' || needs.post-to-x.result == 'skipped') && needs.move-and-update.result == 'success'
+      env:
+        GREETING_MESSAGE: ${{ needs.download.outputs.greeting-message }}
       run: |
         RESULT=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
           -H "Content-Type: application/json" \
-          -d '{"content": "こんにちは"}' \
+          -d "{\"content\": \"$GREETING_MESSAGE\"}" \
           "${{ secrets.DISCORD_WEBHOOK_URL }}")
 
         if [ "$RESULT" == "204" ] || [ "$RESULT" == "200" ]; then

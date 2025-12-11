@@ -1,18 +1,18 @@
-name: Google Drive Mover
+name: OneDrive Mover
 
 on:
   workflow_call:
     inputs:
       source-path:
-        description: '移動元のフォルダパス'
+        description: '移動元のフォルダパス（投稿前フォルダ）'
         required: true
         type: string
       image-name:
         description: '移動する画像名'
         required: true
         type: string
-      dest-path:
-        description: '移動先のフォルダパス'
+      dest-folder:
+        description: '移動先のフォルダ名（例: 投稿済み/）'
         required: true
         type: string
 
@@ -35,7 +35,11 @@ jobs:
       run: |
         DATE=$(date +%Y-%m-%d)
         SOURCE="${{ inputs.source-path }}${{ inputs.image-name }}"
-        DEST="${{ inputs.dest-path }}${DATE}_${{ inputs.image-name }}"
+
+        # 投稿前フォルダのパスから投稿済みフォルダのパスを作成
+        # 例: onedrive:XRC_仮想大学校/おはツイ/1:名前/投稿前/ → onedrive:XRC_仮想大学校/おはツイ/1:名前/投稿済み/
+        BASE_PATH=$(echo "${{ inputs.source-path }}" | sed 's|投稿前/$||')
+        DEST="${BASE_PATH}${{ inputs.dest-folder }}${DATE}_${{ inputs.image-name }}"
 
         echo "📦 Moving: $SOURCE"
         echo "📍 To: $DEST"

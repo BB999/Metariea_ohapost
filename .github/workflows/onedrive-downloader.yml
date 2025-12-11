@@ -1,17 +1,17 @@
-name: Google Drive Downloader
+name: OneDrive Downloader
 
 on:
   workflow_call:
     inputs:
-      gdrive-base-path:
-        description: 'Google Driveのベースパス'
+      base-path:
+        description: 'OneDriveのベースパス（例: onedrive:XRC_仮想大学校/おはツイ/）'
         required: true
         type: string
       artifact-name:
         description: 'アーティファクト名'
         required: false
         type: string
-        default: 'gdrive-images'
+        default: 'onedrive-images'
     outputs:
       folder-name:
         description: '取得したフォルダ名'
@@ -23,8 +23,11 @@ on:
         description: '選択した画像名'
         value: ${{ jobs.download-images.outputs.image-name }}
       folder-path:
-        description: '画像のあるフォルダパス'
+        description: '画像のあるフォルダパス（投稿前フォルダ）'
         value: ${{ jobs.download-images.outputs.folder-path }}
+      greeting-message:
+        description: 'ランダムに選ばれた挨拶メッセージ'
+        value: ${{ jobs.download-images.outputs.greeting-message }}
 
 permissions:
   contents: write
@@ -37,6 +40,7 @@ jobs:
       next-number: ${{ steps.get-folder.outputs.next-number }}
       image-name: ${{ steps.select-image.outputs.image-name }}
       folder-path: ${{ steps.select-image.outputs.folder-path }}
+      greeting-message: ${{ steps.select-greeting.outputs.message }}
 
     steps:
     - name: Checkout repository
@@ -59,7 +63,7 @@ jobs:
         echo "Previous number: $PREV_NUM"
 
         # フォルダの最大数を取得
-        MAX_NUM=$(rclone lsd "${{ inputs.gdrive-base-path }}" | wc -l | tr -d ' ')
+        MAX_NUM=$(rclone lsd "${{ inputs.base-path }}" | wc -l | tr -d ' ')
         echo "Max folders: $MAX_NUM"
 
         # 次の番号（最大数を超えたら1に戻す）
@@ -70,8 +74,10 @@ jobs:
         fi
         echo "Next number: $NEXT_NUM"
 
-        # フォルダ一覧を取得して次の番号のフォルダを探す
-        FOLDER=$(rclone lsd "${{ inputs.gdrive-base-path }}" | awk '{print $NF}' | grep "^${NEXT_NUM}:" | head -n 1)
+        # フォルダ一覧を取得して次の番号のフォルダを探す（02のらねこび のような形式に対応）
+        # 番号を2桁にゼロパディング
+        NEXT_NUM_PADDED=$(printf "%02d" $NEXT_NUM)
+        FOLDER=$(rclone lsd "${{ inputs.base-path }}" | awk '{print $NF}' | grep "^${NEXT_NUM_PADDED}" | head -n 1)
 
         if [ -z "$FOLDER" ]; then
           echo "❌ Folder with number $NEXT_NUM not found"
@@ -92,8 +98,12 @@ jobs:
         mkdir -p ./images
         FOLDER="${{ steps.get-folder.outputs.folder-name }}"
 
+        # 投稿前フォルダのパス
+        SOURCE_PATH="${{ inputs.base-path }}$FOLDER/投稿前/"
+        echo "📂 Source path: $SOURCE_PATH"
+
         # フォルダ内のファイル一覧を取得してランダムに1つ選択
-        IMAGE=$(rclone ls "${{ inputs.gdrive-base-path }}$FOLDER/" | awk '{print $2}' | shuf -n 1)
+        IMAGE=$(rclone ls "$SOURCE_PATH" | awk '{print $2}' | shuf -n 1)
 
         if [ -z "$IMAGE" ]; then
           echo "❌ No image found in folder"
@@ -103,7 +113,7 @@ jobs:
         echo "📷 Selected image: $IMAGE"
 
         # 選択した画像だけダウンロード
-        rclone copy "${{ inputs.gdrive-base-path }}$FOLDER/$IMAGE" ./images/
+        rclone copy "$SOURCE_PATH$IMAGE" ./images/
 
         echo "📁 Downloaded file:"
         ls -la ./images/
@@ -114,9 +124,36 @@ jobs:
           echo "$IMAGE"
           echo "EOF"
           echo "folder-path<<EOF2"
-          echo "${{ inputs.gdrive-base-path }}$FOLDER/"
+          echo "$SOURCE_PATH"
           echo "EOF2"
         } >> $GITHUB_OUTPUT
+
+    - name: Select random greeting message
+      id: select-greeting
+      run: |
+        MESSAGES=(
+          "おはようー。"
+          "おはようございます。"
+          "おはよ～。"
+          "おはようございます！"
+          "Good morning!!"
+          "おはよう。"
+          "おはようございまーす。"
+          "おはよ！"
+          "おはよーございます。"
+          "Good morning."
+          "おはようー"
+          "おはよ！"
+          "おはようございまーす"
+          "Good morning!"
+        )
+
+        # ランダムに1つ選択
+        RANDOM_INDEX=$((RANDOM % ${#MESSAGES[@]}))
+        SELECTED="${MESSAGES[$RANDOM_INDEX]}"
+
+        echo "📝 Selected greeting: $SELECTED"
+        echo "message=$SELECTED" >> $GITHUB_OUTPUT
 
     - name: Upload as artifact
       uses: actions/upload-artifact@v4
