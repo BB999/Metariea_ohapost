@@ -13,7 +13,7 @@ jobs:
   download:
     uses: ./.github/workflows/onedrive-downloader.yml
     with:
-      base-path: 'onedrive:XRC_仮想大学校/おはツイ/'
+      base-path: 'onedrive:マイファイル/XRC_仮想大学校/おはツイ/'
       artifact-name: 'onedrive-images'
     secrets: inherit
 
