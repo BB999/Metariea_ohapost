@@ -29,7 +29,7 @@ jobs:
       if: inputs.image-file != ''
       uses: actions/download-artifact@v4
       with:
-        name: gdrive-images
+        name: onedrive-images
         path: ./images/
         
     - name: Install Pillow for image compression
