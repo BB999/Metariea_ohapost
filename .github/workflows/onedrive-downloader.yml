@@ -55,42 +55,89 @@ jobs:
         mkdir -p ~/.config/rclone
         echo "${{ secrets.RCLONE_CONF_BASE64 }}" | base64 -d > ~/.config/rclone/rclone.conf
 
-    - name: Get next folder
+    - name: Find folder with images and download
       id: get-folder
       run: |
         # 前回の番号を取得
         PREV_NUM=$(cat "previous file")
         echo "Previous number: $PREV_NUM"
 
-        # フォルダの最大数を取得
-        MAX_NUM=$(rclone lsd "${{ inputs.base-path }}" | wc -l | tr -d ' ')
+        # フォルダ一覧を取得（番号付きフォルダのみ、etcなどは除外）
+        FOLDERS=$(rclone lsd "${{ inputs.base-path }}" | awk '{print $NF}' | grep "^[0-9]" | sort)
+        MAX_NUM=$(echo "$FOLDERS" | wc -l | tr -d ' ')
         echo "Max folders: $MAX_NUM"
 
-        # 次の番号（最大数を超えたら1に戻す）
-        NEXT_NUM=$((PREV_NUM + 1))
-        if [ $NEXT_NUM -gt $MAX_NUM ]; then
-          NEXT_NUM=1
-          echo "Reached max, resetting to 1"
-        fi
-        echo "Next number: $NEXT_NUM"
-
-        # フォルダ一覧を取得して次の番号のフォルダを探す（02のらねこび のような形式に対応）
-        # 番号を2桁にゼロパディング
-        NEXT_NUM_PADDED=$(printf "%02d" $NEXT_NUM)
-        FOLDER=$(rclone lsd "${{ inputs.base-path }}" | awk '{print $NF}' | grep "^${NEXT_NUM_PADDED}" | head -n 1)
-
-        if [ -z "$FOLDER" ]; then
-          echo "❌ Folder with number $NEXT_NUM not found"
+        if [ "$MAX_NUM" -eq 0 ]; then
+          echo "❌ No numbered folders found"
           exit 1
         fi
 
-        echo "📁 Found folder: $FOLDER"
-        {
-          echo "folder-name<<EOF"
-          echo "$FOLDER"
-          echo "EOF"
-          echo "next-number=$NEXT_NUM"
-        } >> $GITHUB_OUTPUT
+        # 画像があるフォルダが見つかるまでループ
+        CHECKED=0
+        CURRENT_NUM=$PREV_NUM
+        START_NUM=$((PREV_NUM + 1))
+        if [ $START_NUM -gt $MAX_NUM ]; then
+          START_NUM=1
+        fi
+        FOUND=false
+
+        while [ $CHECKED -lt $MAX_NUM ]; do
+          # 次の番号（最大数を超えたら1に戻す）
+          CURRENT_NUM=$((CURRENT_NUM + 1))
+          if [ $CURRENT_NUM -gt $MAX_NUM ]; then
+            CURRENT_NUM=1
+            echo "🔄 Reached max, resetting to 1"
+          fi
+
+          # 一周したかチェック
+          if [ $CHECKED -gt 0 ] && [ $CURRENT_NUM -eq $START_NUM ]; then
+            echo "❌ Checked all folders, no images found"
+            exit 1
+          fi
+
+          echo "🔍 Checking folder number: $CURRENT_NUM"
+
+          # 番号を2桁にゼロパディング
+          NUM_PADDED=$(printf "%02d" $CURRENT_NUM)
+          FOLDER=$(echo "$FOLDERS" | grep "^${NUM_PADDED}" | head -n 1)
+
+          if [ -z "$FOLDER" ]; then
+            echo "⚠️ Folder with number $CURRENT_NUM not found, skipping..."
+            CHECKED=$((CHECKED + 1))
+            continue
+          fi
+
+          echo "📁 Found folder: $FOLDER"
+
+          # 投稿前フォルダに画像があるか確認
+          SOURCE_PATH="${{ inputs.base-path }}$FOLDER/投稿前/"
+          IMAGE_COUNT=$(rclone ls "$SOURCE_PATH" 2>/dev/null | wc -l | tr -d ' ')
+
+          if [ "$IMAGE_COUNT" -gt 0 ]; then
+            echo "✅ Found $IMAGE_COUNT image(s) in $FOLDER/投稿前/"
+            FOUND=true
+
+            # 出力を設定
+            {
+              echo "folder-name<<EOF"
+              echo "$FOLDER"
+              echo "EOF"
+              echo "next-number=$CURRENT_NUM"
+            } >> $GITHUB_OUTPUT
+
+            break
+          else
+            echo "⚠️ No images in $FOLDER/投稿前/, skipping..."
+          fi
+
+          CHECKED=$((CHECKED + 1))
+        done
+
+        # 画像が見つからなかった場合
+        if [ "$FOUND" = false ]; then
+          echo "❌ No images found in any folder"
+          exit 1
+        fi
 
     - name: Select and download random image
       id: select-image
