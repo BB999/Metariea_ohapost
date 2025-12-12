@@ -109,9 +109,9 @@ jobs:
 
           echo "📁 Found folder: $FOLDER"
 
-          # 投稿前フォルダに画像があるか確認
+          # 投稿前フォルダに画像があるか確認（jpg, jpeg, png, gif, webpのみ）
           SOURCE_PATH="${{ inputs.base-path }}$FOLDER/投稿前/"
-          IMAGE_COUNT=$(rclone ls "$SOURCE_PATH" 2>/dev/null | wc -l | tr -d ' ')
+          IMAGE_COUNT=$(rclone ls "$SOURCE_PATH" 2>/dev/null | awk '{print $2}' | grep -iE '\.(jpg|jpeg|png|gif|webp)$' | wc -l | tr -d ' ')
 
           if [ "$IMAGE_COUNT" -gt 0 ]; then
             echo "✅ Found $IMAGE_COUNT image(s) in $FOLDER/投稿前/"
@@ -149,8 +149,8 @@ jobs:
         SOURCE_PATH="${{ inputs.base-path }}$FOLDER/投稿前/"
         echo "📂 Source path: $SOURCE_PATH"
 
-        # フォルダ内のファイル一覧を取得してランダムに1つ選択
-        IMAGE=$(rclone ls "$SOURCE_PATH" | awk '{print $2}' | shuf -n 1)
+        # フォルダ内の画像ファイル一覧を取得してランダムに1つ選択（jpg, jpeg, png, gif, webpのみ）
+        IMAGE=$(rclone ls "$SOURCE_PATH" | awk '{print $2}' | grep -iE '\.(jpg|jpeg|png|gif|webp)$' | shuf -n 1)
 
         if [ -z "$IMAGE" ]; then
           echo "❌ No image found in folder"
