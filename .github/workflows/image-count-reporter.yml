@@ -54,12 +54,15 @@ jobs:
         echo "✅ カウント完了 (合計: ${TOTAL}枚)"
 
     - name: Send report to Discord
+      env:
+        REPORT: ${{ steps.count.outputs.report }}
       run: |
-        REPORT='${{ steps.count.outputs.report }}'
+        # jqを使ってJSONを正しくエスケープ
+        JSON_PAYLOAD=$(jq -n --arg content "$REPORT" '{content: $content}')
 
         curl -X POST \
           -H "Content-Type: application/json" \
-          -d "{\"content\": \"$REPORT\"}" \
+          -d "$JSON_PAYLOAD" \
           "${{ secrets.DISCORD_WEBHOOK_URL }}"
 
         echo "✅ Discordにレポートを送信しました"
