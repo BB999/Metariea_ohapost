@@ -1,9 +1,9 @@
 name: Image Count Reporter
 
 on:
-  # 毎週日曜日7時（日本時間）に自動実行
+  # 毎週日曜日6:55（日本時間）に自動実行
   schedule:
-    - cron: '0 22 * * 6'  # UTC 22:00（土曜日）= JST 7:00（日曜日）
+    - cron: '55 21 * * 6'  # UTC 21:55（土曜日）= JST 6:55（日曜日）
 
   # 手動実行
   workflow_dispatch:

@@ -1,9 +1,9 @@
 name: OneDrive to Discord
 
 on:
-  # 毎朝7時（日本時間）に自動実行
+  # 毎朝6:55（日本時間）に自動実行
   schedule:
-    - cron: '0 22 * * *'  # UTC 22:00 = JST 7:00
+    - cron: '55 21 * * *'  # UTC 21:55 = JST 6:55
 
   # 手動実行も可能
   workflow_dispatch:
