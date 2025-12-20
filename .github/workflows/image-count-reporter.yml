@@ -60,9 +60,23 @@ jobs:
         # jqを使ってJSONを正しくエスケープ
         JSON_PAYLOAD=$(jq -n --arg content "$REPORT" '{content: $content}')
 
-        curl -X POST \
+        echo "送信するJSON:"
+        echo "$JSON_PAYLOAD"
+
+        RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST \
           -H "Content-Type: application/json" \
           -d "$JSON_PAYLOAD" \
-          "${{ secrets.DISCORD_WEBHOOK_URL_METARIEA }}"
+          "${{ secrets.DISCORD_WEBHOOK_URL_METARIEA }}")
 
-        echo "✅ Discordにレポートを送信しました"
+        HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_CODE:" | cut -d: -f2)
+        BODY=$(echo "$RESPONSE" | grep -v "HTTP_CODE:")
+
+        echo "HTTPステータス: $HTTP_CODE"
+        echo "レスポンス: $BODY"
+
+        if [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "200" ]; then
+          echo "✅ Discordにレポートを送信しました"
+        else
+          echo "❌ Discord送信失敗"
+          exit 1
+        fi
