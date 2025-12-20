@@ -1,0 +1,65 @@
+name: Image Count Reporter
+
+on:
+  # 毎週日曜日7時（日本時間）に自動実行
+  schedule:
+    - cron: '0 22 * * 6'  # UTC 22:00（土曜日）= JST 7:00（日曜日）
+
+  # 手動実行
+  workflow_dispatch:
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Install rclone
+      run: |
+        curl https://rclone.org/install.sh | sudo bash
+
+    - name: Setup rclone config
+      run: |
+        mkdir -p ~/.config/rclone
+        echo "${{ secrets.RCLONE_CONF_BASE64 }}" | base64 -d > ~/.config/rclone/rclone.conf
+
+    - name: Count images in each folder
+      id: count
+      run: |
+        BASE_PATH="onedrive:XRC_仮想大学校/XRCおはツイ/"
+
+        # 番号+名前形式のフォルダのみ取得
+        FOLDERS=$(rclone lsd "$BASE_PATH" | awk '{print $NF}' | grep -E "^[0-9]{2}.+" | sort)
+
+        echo "📊 各フォルダの投稿前画像数をカウント中..."
+
+        REPORT="📊 **残り画像数レポート**\n━━━━━━━━━━━━━━━━━━━━\n"
+        TOTAL=0
+
+        while IFS= read -r FOLDER; do
+          if [ -n "$FOLDER" ]; then
+            COUNT=$(rclone ls "${BASE_PATH}${FOLDER}/投稿前/" 2>/dev/null | grep -iE '\.(jpg|jpeg|png|gif|webp)$' | wc -l | tr -d ' ')
+            REPORT="${REPORT}${FOLDER}: ${COUNT}枚\n"
+            TOTAL=$((TOTAL + COUNT))
+            echo "  ${FOLDER}: ${COUNT}枚"
+          fi
+        done <<< "$FOLDERS"
+
+        REPORT="${REPORT}━━━━━━━━━━━━━━━━━━━━\n📦 合計: ${TOTAL}枚"
+
+        echo "report<<EOF" >> $GITHUB_OUTPUT
+        echo -e "$REPORT" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+        echo ""
+        echo "✅ カウント完了 (合計: ${TOTAL}枚)"
+
+    - name: Send report to Discord
+      run: |
+        REPORT='${{ steps.count.outputs.report }}'
+
+        curl -X POST \
+          -H "Content-Type: application/json" \
+          -d "{\"content\": \"$REPORT\"}" \
+          "${{ secrets.DISCORD_WEBHOOK_URL }}"
+
+        echo "✅ Discordにレポートを送信しました"
