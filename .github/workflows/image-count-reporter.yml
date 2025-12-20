@@ -32,7 +32,7 @@ jobs:
 
         echo "📊 各フォルダの投稿前画像数をカウント中..."
 
-        REPORT="📊 **残り画像数レポート**\n━━━━━━━━━━━━━━━━━━━━\n"
+        REPORT="📊 **おはツイ画像数レポート**\n━━━━━━━━━━━━━━━━━━━━\n"
         TOTAL=0
 
         while IFS= read -r FOLDER; do
@@ -63,6 +63,6 @@ jobs:
         curl -X POST \
           -H "Content-Type: application/json" \
           -d "$JSON_PAYLOAD" \
-          "${{ secrets.DISCORD_WEBHOOK_URL }}"
+          "${{ secrets.DISCORD_WEBHOOK_URL_METARIEA }}"
 
         echo "✅ Discordにレポートを送信しました"
