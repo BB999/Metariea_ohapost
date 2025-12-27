@@ -33,7 +33,7 @@ jobs:
 
     - name: Move image to destination
       run: |
-        DATE=$(date +%Y-%m-%d)
+        DATE=$(TZ='Asia/Tokyo' date +%Y-%m-%d)
         SOURCE="${{ inputs.source-path }}${{ inputs.image-name }}"
 
         # 投稿前フォルダのパスから投稿済みフォルダのパスを作成
