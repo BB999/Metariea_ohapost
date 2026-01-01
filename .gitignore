@@ -1,4 +1,5 @@
 rclone_conf_base64.txt
 .DS_Store
 local-script/config.env
+local-script/config.env.example
 local-script/images/
