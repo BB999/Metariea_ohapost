@@ -3,3 +3,4 @@ rclone_conf_base64.txt
 local-script/config.env
 local-script/config.env.example
 local-script/images/
+local-script/使い方.md
