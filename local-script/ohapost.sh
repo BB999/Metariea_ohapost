@@ -7,7 +7,9 @@ cd "$SCRIPT_DIR"
 
 # 設定ファイル読み込み
 if [ -f "config.env" ]; then
+  set -a  # 以降の変数を自動的にexport
   source config.env
+  set +a  # 自動exportを無効化
 else
   echo "❌ config.env が見つかりません。config.env.example をコピーして設定してください。"
   exit 1
@@ -169,8 +171,13 @@ download_random_image() {
   echo "📥 画像をダウンロード中..."
 
   # 画像一覧を取得してランダムに選択
+  local images
+  images=$(rclone ls "$SOURCE_PATH" | awk '{print $2}' | grep -iE '\.(jpg|jpeg|png|gif|webp)$')
+  local image_count
+  image_count=$(echo "$images" | wc -l | tr -d ' ')
+  local random_index=$((RANDOM % image_count + 1))
   local image
-  image=$(rclone ls "$SOURCE_PATH" | awk '{print $2}' | grep -iE '\.(jpg|jpeg|png|gif|webp)$' | shuf -n 1)
+  image=$(echo "$images" | sed -n "${random_index}p")
 
   if [ -z "$image" ]; then
     echo "❌ 画像が見つかりません"
