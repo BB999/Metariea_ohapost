@@ -46,7 +46,12 @@ else
 
   # ohapost.shを実行
   if [ -x "$OHAPOST_SCRIPT" ]; then
-    "$OHAPOST_SCRIPT"
+    if "$OHAPOST_SCRIPT"; then
+      notify_discord "✅ **フォールバック実行成功**\nohapost.sh が正常に完了しました。"
+    else
+      notify_discord "❌ **フォールバック実行失敗**\nohapost.sh の実行に失敗しました。"
+      exit 1
+    fi
   else
     notify_discord "❌ **エラー**: ohapost.sh が見つからないか実行権限がありません"
     exit 1
