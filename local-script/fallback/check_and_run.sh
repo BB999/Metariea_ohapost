@@ -28,25 +28,53 @@ notify_discord() {
 
 # GitHub Actionsの最新の実行結果を取得し、今日（JST）のものか確認
 TODAY_JST=$(TZ='Asia/Tokyo' date +%Y-%m-%d)
+WAIT_SECONDS=300  # 実行中の場合の待機時間（5分）
 
-RUN_DATA=$(gh run list \
-  --repo "$GITHUB_REPO" \
-  --workflow "$WORKFLOW_NAME" \
-  --limit 1 \
-  --json conclusion,createdAt \
-  --jq '.[0] // empty' 2>/dev/null)
+check_workflow_status() {
+  local run_data
+  run_data=$(gh run list \
+    --repo "$GITHUB_REPO" \
+    --workflow "$WORKFLOW_NAME" \
+    --limit 1 \
+    --json conclusion,createdAt,status \
+    --jq '.[0] // empty' 2>/dev/null)
 
-if [ -z "$RUN_DATA" ]; then
-  RESULT="none"
-else
-  CREATED_AT=$(echo "$RUN_DATA" | jq -r '.createdAt')
-  CONCLUSION=$(echo "$RUN_DATA" | jq -r '.conclusion // "none"')
-  # createdAt(UTC)をJSTに変換して日付を取得
-  RUN_DATE_JST=$(TZ='Asia/Tokyo' date -d "$CREATED_AT" +%Y-%m-%d)
+  if [ -z "$run_data" ]; then
+    echo "none"
+    return
+  fi
 
-  if [ "$RUN_DATE_JST" = "$TODAY_JST" ]; then
-    RESULT="$CONCLUSION"
-  else
+  local created_at status conclusion run_date_jst
+  created_at=$(echo "$run_data" | jq -r '.createdAt')
+  status=$(echo "$run_data" | jq -r '.status // "unknown"')
+  conclusion=$(echo "$run_data" | jq -r '.conclusion // "none"')
+  run_date_jst=$(TZ='Asia/Tokyo' date -d "$created_at" +%Y-%m-%d)
+
+  if [ "$run_date_jst" != "$TODAY_JST" ]; then
+    echo "none"
+    return
+  fi
+
+  # まだ実行中の場合
+  if [ "$status" != "completed" ]; then
+    echo "in_progress"
+    return
+  fi
+
+  echo "$conclusion"
+}
+
+RESULT=$(check_workflow_status)
+
+# ワークフローが実行中の場合は5分待って再確認
+if [ "$RESULT" = "in_progress" ]; then
+  echo "⏳ ワークフローが実行中です。${WAIT_SECONDS}秒後に再確認します..."
+  sleep "$WAIT_SECONDS"
+  RESULT=$(check_workflow_status)
+
+  # 待っても実行中なら未完了として扱う
+  if [ "$RESULT" = "in_progress" ]; then
+    echo "⚠️ 待機後もワークフローが実行中のため、未完了として扱います"
     RESULT="none"
   fi
 fi
@@ -54,11 +82,12 @@ fi
 # ステータスを日本語に変換
 status_to_japanese() {
   case "$1" in
-    success)   echo "成功" ;;
-    failure)   echo "失敗" ;;
-    cancelled) echo "キャンセル" ;;
-    none)      echo "未実行" ;;
-    *)         echo "$1" ;;
+    success)     echo "成功" ;;
+    failure)     echo "失敗" ;;
+    cancelled)   echo "キャンセル" ;;
+    in_progress) echo "実行中" ;;
+    none)        echo "未実行" ;;
+    *)           echo "$1" ;;
   esac
 }
 
