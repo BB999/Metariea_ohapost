@@ -5,15 +5,14 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# 設定ファイル読み込み
-if [ -f "config.env" ]; then
-  set -a  # 以降の変数を自動的にexport
-  source config.env
-  set +a  # 自動exportを無効化
-else
-  echo "❌ config.env が見つかりません。config.env.example をコピーして設定してください。"
-  exit 1
-fi
+# macOS Keychainから設定を読み込み
+export GITHUB_REPO=$(security find-generic-password -s "ohapost" -a "github-repo" -w)
+export DISCORD_WEBHOOK_URL=$(security find-generic-password -s "ohapost" -a "discord-webhook-url" -w)
+export ONEDRIVE_BASE_PATH=$(security find-generic-password -s "ohapost" -a "onedrive-base-path" -w)
+export X_API_KEY=$(security find-generic-password -s "ohapost" -a "x-api-key" -w)
+export X_API_SECRET=$(security find-generic-password -s "ohapost" -a "x-api-secret" -w)
+export X_ACCESS_TOKEN=$(security find-generic-password -s "ohapost" -a "x-access-token" -w)
+export X_ACCESS_TOKEN_SECRET=$(security find-generic-password -s "ohapost" -a "x-access-token-secret" -w)
 
 # 一時ディレクトリ
 IMAGES_DIR="$SCRIPT_DIR/images"

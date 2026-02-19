@@ -7,13 +7,9 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OHAPOST_SCRIPT="$SCRIPT_DIR/../ohapost.sh"
 
-# config.envからDiscord Webhook URLを読み込む
-if [ -f "$SCRIPT_DIR/../config.env" ]; then
-  source "$SCRIPT_DIR/../config.env"
-else
-  echo "config.env が見つかりません"
-  exit 1
-fi
+# macOS Keychainから設定を読み込み
+GITHUB_REPO=$(security find-generic-password -s "ohapost" -a "github-repo" -w)
+DISCORD_WEBHOOK_URL=$(security find-generic-password -s "ohapost" -a "discord-webhook-url" -w)
 
 WORKFLOW_NAME="OneDrive to Discord"
 
