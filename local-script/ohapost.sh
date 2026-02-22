@@ -52,7 +52,7 @@ get_previous_number() {
     exit 1
   fi
 
-  PREV_NUM=$(echo "$response" | jq -r '.content' | base64 -d | tr -d '\n')
+  PREV_NUM=$(echo "$response" | jq -r '.content' | base64 -D | tr -d '\n')
   FILE_SHA=$(echo "$response" | jq -r '.sha')
 
   echo "✅ 前回の番号: $PREV_NUM"

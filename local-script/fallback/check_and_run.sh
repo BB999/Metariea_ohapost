@@ -44,7 +44,10 @@ check_workflow_status() {
   created_at=$(echo "$run_data" | jq -r '.createdAt')
   status=$(echo "$run_data" | jq -r '.status // "unknown"')
   conclusion=$(echo "$run_data" | jq -r '.conclusion // "none"')
-  run_date_jst=$(TZ='Asia/Tokyo' date -d "$created_at" +%Y-%m-%d)
+  # ISO 8601形式からエポック秒に変換してJSTの日付を取得（macOS互換）
+  local epoch
+  epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$created_at" +%s 2>/dev/null)
+  run_date_jst=$(TZ='Asia/Tokyo' date -j -r "$epoch" +%Y-%m-%d)
 
   if [ "$run_date_jst" != "$TODAY_JST" ]; then
     echo "none"
