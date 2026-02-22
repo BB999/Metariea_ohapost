@@ -46,7 +46,7 @@ check_workflow_status() {
   conclusion=$(echo "$run_data" | jq -r '.conclusion // "none"')
   # ISO 8601形式からエポック秒に変換してJSTの日付を取得（macOS互換）
   local epoch
-  epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$created_at" +%s 2>/dev/null)
+  epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$created_at" +%s 2>/dev/null)
   run_date_jst=$(TZ='Asia/Tokyo' date -j -r "$epoch" +%Y-%m-%d)
 
   if [ "$run_date_jst" != "$TODAY_JST" ]; then
