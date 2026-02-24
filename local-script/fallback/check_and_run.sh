@@ -45,8 +45,16 @@ check_workflow_status() {
   status=$(echo "$run_data" | jq -r '.status // "unknown"')
   conclusion=$(echo "$run_data" | jq -r '.conclusion // "none"')
   # ISO 8601形式からエポック秒に変換してJSTの日付を取得（macOS互換）
-  local epoch
-  epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$created_at" +%s 2>/dev/null)
+  # ミリ秒(.xxxZ)が含まれる場合があるので除去してからパース
+  local cleaned_date epoch
+  cleaned_date=$(echo "$created_at" | sed 's/\.[0-9]*Z$/Z/')
+  epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$cleaned_date" +%s 2>/dev/null)
+
+  if [ -z "$epoch" ]; then
+    echo "none"
+    return
+  fi
+
   run_date_jst=$(TZ='Asia/Tokyo' date -j -r "$epoch" +%Y-%m-%d)
 
   if [ "$run_date_jst" != "$TODAY_JST" ]; then
