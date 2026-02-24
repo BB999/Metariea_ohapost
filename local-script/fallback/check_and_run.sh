@@ -4,6 +4,9 @@
 # 毎朝7:10(JST)にGitHub Actionsの実行結果を確認し、
 # 失敗または未実行の場合にローカルのohapost.shを実行する
 
+# launchd環境ではPATHが制限されるため、Homebrewのパスを追加
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OHAPOST_SCRIPT="$SCRIPT_DIR/../ohapost.sh"
 
