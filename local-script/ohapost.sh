@@ -8,7 +8,8 @@ cd "$SCRIPT_DIR"
 # macOS Keychainから設定を読み込み
 export GITHUB_REPO=$(security find-generic-password -s "ohapost" -a "github-repo" -w)
 export DISCORD_WEBHOOK_URL=$(security find-generic-password -s "ohapost" -a "discord-webhook-url" -w)
-export ONEDRIVE_BASE_PATH=$(security find-generic-password -s "ohapost" -a "onedrive-base-path" -w)
+# Keychainが日本語をhexエンコードして返すためデコードが必要
+export ONEDRIVE_BASE_PATH=$(security find-generic-password -s "ohapost" -a "onedrive-base-path" -w | xxd -r -p)
 export X_API_KEY=$(security find-generic-password -s "ohapost" -a "x-api-key" -w)
 export X_API_SECRET=$(security find-generic-password -s "ohapost" -a "x-api-secret" -w)
 export X_ACCESS_TOKEN=$(security find-generic-password -s "ohapost" -a "x-access-token" -w)

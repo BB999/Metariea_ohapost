@@ -2,6 +2,8 @@
 """
 X (Twitter) 投稿スクリプト
 Usage: python3 post_x.py "ツイートテキスト" "画像パス(任意)"
+
+v2 API対応版: メディアアップロードに /2/media/upload エンドポイントを使用
 """
 
 import os
@@ -12,6 +14,7 @@ import random
 import hmac
 import hashlib
 import base64
+import mimetypes
 import urllib.parse
 import urllib.request
 
@@ -41,26 +44,71 @@ def create_oauth_signature(method, url, params, api_secret, token_secret):
     return urllib.parse.quote(signature, safe='')
 
 
+def create_auth_header(method, url, extra_params=None):
+    """OAuth 1.0a Authorization ヘッダーを生成"""
+    oauth_params = {
+        'oauth_consumer_key': API_KEY,
+        'oauth_nonce': str(random.randint(0, 1000000000)),
+        'oauth_signature_method': 'HMAC-SHA1',
+        'oauth_timestamp': str(int(time.time())),
+        'oauth_token': ACCESS_TOKEN,
+        'oauth_version': '1.0'
+    }
+
+    # 署名用パラメータ（OAuthパラメータ + 追加パラメータ）
+    sign_params = dict(oauth_params)
+    if extra_params:
+        sign_params.update(extra_params)
+
+    oauth_params['oauth_signature'] = create_oauth_signature(
+        method, url, sign_params, API_SECRET, ACCESS_TOKEN_SECRET
+    )
+
+    return 'OAuth ' + ', '.join([f'{k}="{v}"' for k, v in sorted(oauth_params.items())])
+
+
 def upload_media(file_path):
-    """メディアアップロード"""
-    upload_url = "https://upload.twitter.com/1.1/media/upload.json"
+    """v2 API でメディアアップロード (INIT → APPEND → FINALIZE)"""
+
+    file_size = os.path.getsize(file_path)
+    mime_type = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
+
+    print(f"📊 ファイル: {file_path} ({file_size} bytes, {mime_type})")
+
+    # --- Step 1: INIT ---
+    init_url = "https://api.x.com/2/media/upload/initialize"
+
+    init_body = json.dumps({
+        'media_type': mime_type,
+        'total_bytes': file_size,
+        'media_category': 'tweet_image'
+    }).encode('utf-8')
+
+    auth_header = create_auth_header('POST', init_url)
+
+    req = urllib.request.Request(init_url, data=init_body, headers={
+        'Authorization': auth_header,
+        'Content-Type': 'application/json'
+    })
 
     try:
-        oauth_params = {
-            'oauth_consumer_key': API_KEY,
-            'oauth_nonce': str(random.randint(0, 1000000000)),
-            'oauth_signature_method': 'HMAC-SHA1',
-            'oauth_timestamp': str(int(time.time())),
-            'oauth_token': ACCESS_TOKEN,
-            'oauth_version': '1.0'
-        }
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode())
+            media_id = result['data']['id']
+            print(f"✅ INIT成功: media_id={media_id}")
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode()
+        print(f"❌ INIT失敗: {e.code} - {e.reason}")
+        print(f"   詳細: {error_body}")
+        return None
+    except Exception as e:
+        print(f"❌ INIT例外: {e}")
+        return None
 
-        oauth_params['oauth_signature'] = create_oauth_signature(
-            'POST', upload_url, oauth_params, API_SECRET, ACCESS_TOKEN_SECRET
-        )
+    # --- Step 2: APPEND ---
+    append_url = f"https://api.x.com/2/media/upload/{media_id}/append"
 
-        auth_header = 'OAuth ' + ', '.join([f'{k}="{v}"' for k, v in sorted(oauth_params.items())])
-
+    try:
         with open(file_path, 'rb') as f:
             file_data = f.read()
 
@@ -69,42 +117,102 @@ def upload_media(file_path):
         body_parts = []
         body_parts.append(f'--{boundary}')
         body_parts.append('Content-Disposition: form-data; name="media"; filename="upload"')
-        body_parts.append('Content-Type: application/octet-stream')
+        body_parts.append(f'Content-Type: {mime_type}')
         body_parts.append('')
 
         body_prefix = '\r\n'.join(body_parts) + '\r\n'
-        body_suffix = f'\r\n--{boundary}--\r\n'
 
-        body = body_prefix.encode() + file_data + body_suffix.encode()
+        # segment_index パート
+        segment_part = f'\r\n--{boundary}\r\n'
+        segment_part += 'Content-Disposition: form-data; name="segment_index"\r\n\r\n'
+        segment_part += '0'
+        segment_suffix = f'\r\n--{boundary}--\r\n'
 
-        req = urllib.request.Request(upload_url, data=body, headers={
+        body = body_prefix.encode() + file_data + segment_part.encode() + segment_suffix.encode()
+
+        auth_header = create_auth_header('POST', append_url)
+
+        req = urllib.request.Request(append_url, data=body, headers={
             'Authorization': auth_header,
             'Content-Type': f'multipart/form-data; boundary={boundary}'
         })
 
         with urllib.request.urlopen(req) as response:
-            result = json.loads(response.read().decode())
-            media_id = result.get('media_id_string')
-            if media_id:
-                print(f"✅ メディアアップロード成功: {media_id}")
-                return media_id
-            else:
-                print(f"❌ メディアIDが取得できませんでした")
-                return None
+            print(f"✅ APPEND成功")
 
     except urllib.error.HTTPError as e:
         error_body = e.read().decode()
-        print(f"❌ メディアアップロードエラー: {e.code} - {e.reason}")
+        print(f"❌ APPEND失敗: {e.code} - {e.reason}")
         print(f"   詳細: {error_body}")
         return None
     except Exception as e:
-        print(f"❌ メディアアップロード例外: {e}")
+        print(f"❌ APPEND例外: {e}")
         return None
+
+    # --- Step 3: FINALIZE ---
+    finalize_url = f"https://api.x.com/2/media/upload/{media_id}/finalize"
+
+    auth_header = create_auth_header('POST', finalize_url)
+
+    req = urllib.request.Request(finalize_url, data=b'', headers={
+        'Authorization': auth_header,
+    })
+
+    try:
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode())
+            print(f"✅ FINALIZE成功: media_id={media_id}")
+
+            # processing_info がある場合は処理完了を待つ
+            processing = result.get('data', {}).get('processing_info')
+            if processing and processing.get('state') not in ('succeeded', None):
+                print(f"⏳ メディア処理中...")
+                wait_for_processing(media_id)
+
+            return media_id
+
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode()
+        print(f"❌ FINALIZE失敗: {e.code} - {e.reason}")
+        print(f"   詳細: {error_body}")
+        return None
+    except Exception as e:
+        print(f"❌ FINALIZE例外: {e}")
+        return None
+
+
+def wait_for_processing(media_id):
+    """メディア処理完了を待つ"""
+    status_url = f"https://api.x.com/2/media/upload/{media_id}"
+
+    for _ in range(30):
+        time.sleep(2)
+
+        auth_header = create_auth_header('GET', status_url)
+
+        req = urllib.request.Request(status_url, headers={
+            'Authorization': auth_header,
+        })
+
+        try:
+            with urllib.request.urlopen(req) as response:
+                result = json.loads(response.read().decode())
+                state = result.get('data', {}).get('processing_info', {}).get('state')
+                if state == 'succeeded':
+                    print(f"✅ メディア処理完了")
+                    return
+                elif state == 'failed':
+                    print(f"❌ メディア処理失敗")
+                    return
+                print(f"⏳ 処理中... ({state})")
+        except Exception as e:
+            print(f"⚠️ ステータス確認エラー: {e}")
+            return
 
 
 def post_tweet(text, image_file=None):
     """ツイート投稿"""
-    url = "https://api.twitter.com/2/tweets"
+    url = "https://api.x.com/2/tweets"
 
     # メディアアップロード
     uploaded_media_ids = []
@@ -116,22 +224,6 @@ def post_tweet(text, image_file=None):
         else:
             print(f"⚠️ 画像アップロードに失敗、テキストのみで投稿を続行")
 
-    # OAuth パラメータ
-    oauth_params = {
-        'oauth_consumer_key': API_KEY,
-        'oauth_nonce': str(random.randint(0, 1000000000)),
-        'oauth_signature_method': 'HMAC-SHA1',
-        'oauth_timestamp': str(int(time.time())),
-        'oauth_token': ACCESS_TOKEN,
-        'oauth_version': '1.0'
-    }
-
-    oauth_params['oauth_signature'] = create_oauth_signature(
-        'POST', url, oauth_params, API_SECRET, ACCESS_TOKEN_SECRET
-    )
-
-    auth_header = 'OAuth ' + ', '.join([f'{k}="{v}"' for k, v in sorted(oauth_params.items())])
-
     # リクエストボディ
     tweet_data = {'text': text}
     if uploaded_media_ids:
@@ -139,6 +231,8 @@ def post_tweet(text, image_file=None):
         print(f"📎 メディア添付: {len(uploaded_media_ids)}個")
 
     body = json.dumps(tweet_data).encode('utf-8')
+
+    auth_header = create_auth_header('POST', url)
 
     req = urllib.request.Request(url, data=body, headers={
         'Authorization': auth_header,
@@ -150,7 +244,7 @@ def post_tweet(text, image_file=None):
             result = json.loads(response.read().decode())
             print(f"✅ ツイートを投稿しました: {text}")
             print(f"   ツイートID: {result['data']['id']}")
-            print(f"   URL: https://twitter.com/i/web/status/{result['data']['id']}")
+            print(f"   URL: https://x.com/i/web/status/{result['data']['id']}")
             return True
     except urllib.error.HTTPError as e:
         error_body = e.read().decode()
