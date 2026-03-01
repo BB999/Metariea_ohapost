@@ -68,146 +68,58 @@ def create_auth_header(method, url, extra_params=None):
 
 
 def upload_media(file_path):
-    """v2 API でメディアアップロード (INIT → APPEND → FINALIZE)"""
+    """v2 API でメディアアップロード (OneShot)"""
 
     file_size = os.path.getsize(file_path)
     mime_type = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
 
     print(f"📊 ファイル: {file_path} ({file_size} bytes, {mime_type})")
 
-    # --- Step 1: INIT ---
-    init_url = "https://api.x.com/2/media/upload/initialize"
+    upload_url = "https://api.x.com/2/media/upload"
 
-    init_body = json.dumps({
-        'media_type': mime_type,
-        'total_bytes': file_size,
-        'media_category': 'tweet_image'
-    }).encode('utf-8')
+    with open(file_path, 'rb') as f:
+        file_data = f.read()
 
-    auth_header = create_auth_header('POST', init_url)
+    boundary = f'----WebKitFormBoundary{random.randint(1000000000, 9999999999)}'
 
-    req = urllib.request.Request(init_url, data=init_body, headers={
+    # multipart/form-data ボディを構築
+    body_parts = []
+
+    # media パート
+    body_parts.append(f'--{boundary}\r\n')
+    body_parts.append('Content-Disposition: form-data; name="media"; filename="upload"\r\n')
+    body_parts.append(f'Content-Type: {mime_type}\r\n')
+    body_parts.append('\r\n')
+
+    # media_category パート
+    category_part = f'\r\n--{boundary}\r\n'
+    category_part += 'Content-Disposition: form-data; name="media_category"\r\n\r\n'
+    category_part += 'tweet_image'
+    category_suffix = f'\r\n--{boundary}--\r\n'
+
+    body = ''.join(body_parts).encode() + file_data + category_part.encode() + category_suffix.encode()
+
+    auth_header = create_auth_header('POST', upload_url)
+
+    req = urllib.request.Request(upload_url, data=body, headers={
         'Authorization': auth_header,
-        'Content-Type': 'application/json'
+        'Content-Type': f'multipart/form-data; boundary={boundary}'
     })
 
     try:
         with urllib.request.urlopen(req) as response:
             result = json.loads(response.read().decode())
             media_id = result['data']['id']
-            print(f"✅ INIT成功: media_id={media_id}")
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode()
-        print(f"❌ INIT失敗: {e.code} - {e.reason}")
-        print(f"   詳細: {error_body}")
-        return None
-    except Exception as e:
-        print(f"❌ INIT例外: {e}")
-        return None
-
-    # --- Step 2: APPEND ---
-    append_url = f"https://api.x.com/2/media/upload/{media_id}/append"
-
-    try:
-        with open(file_path, 'rb') as f:
-            file_data = f.read()
-
-        boundary = f'----WebKitFormBoundary{random.randint(1000000000, 9999999999)}'
-
-        body_parts = []
-        body_parts.append(f'--{boundary}')
-        body_parts.append('Content-Disposition: form-data; name="media"; filename="upload"')
-        body_parts.append(f'Content-Type: {mime_type}')
-        body_parts.append('')
-
-        body_prefix = '\r\n'.join(body_parts) + '\r\n'
-
-        # segment_index パート
-        segment_part = f'\r\n--{boundary}\r\n'
-        segment_part += 'Content-Disposition: form-data; name="segment_index"\r\n\r\n'
-        segment_part += '0'
-        segment_suffix = f'\r\n--{boundary}--\r\n'
-
-        body = body_prefix.encode() + file_data + segment_part.encode() + segment_suffix.encode()
-
-        auth_header = create_auth_header('POST', append_url)
-
-        req = urllib.request.Request(append_url, data=body, headers={
-            'Authorization': auth_header,
-            'Content-Type': f'multipart/form-data; boundary={boundary}'
-        })
-
-        with urllib.request.urlopen(req) as response:
-            print(f"✅ APPEND成功")
-
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode()
-        print(f"❌ APPEND失敗: {e.code} - {e.reason}")
-        print(f"   詳細: {error_body}")
-        return None
-    except Exception as e:
-        print(f"❌ APPEND例外: {e}")
-        return None
-
-    # --- Step 3: FINALIZE ---
-    finalize_url = f"https://api.x.com/2/media/upload/{media_id}/finalize"
-
-    auth_header = create_auth_header('POST', finalize_url)
-
-    req = urllib.request.Request(finalize_url, data=b'', headers={
-        'Authorization': auth_header,
-    })
-
-    try:
-        with urllib.request.urlopen(req) as response:
-            result = json.loads(response.read().decode())
-            print(f"✅ FINALIZE成功: media_id={media_id}")
-
-            # processing_info がある場合は処理完了を待つ
-            processing = result.get('data', {}).get('processing_info')
-            if processing and processing.get('state') not in ('succeeded', None):
-                print(f"⏳ メディア処理中...")
-                wait_for_processing(media_id)
-
+            print(f"✅ アップロード成功: media_id={media_id}")
             return media_id
-
     except urllib.error.HTTPError as e:
         error_body = e.read().decode()
-        print(f"❌ FINALIZE失敗: {e.code} - {e.reason}")
+        print(f"❌ アップロード失敗: {e.code} - {e.reason}")
         print(f"   詳細: {error_body}")
         return None
     except Exception as e:
-        print(f"❌ FINALIZE例外: {e}")
+        print(f"❌ アップロード例外: {e}")
         return None
-
-
-def wait_for_processing(media_id):
-    """メディア処理完了を待つ"""
-    status_url = f"https://api.x.com/2/media/upload/{media_id}"
-
-    for _ in range(30):
-        time.sleep(2)
-
-        auth_header = create_auth_header('GET', status_url)
-
-        req = urllib.request.Request(status_url, headers={
-            'Authorization': auth_header,
-        })
-
-        try:
-            with urllib.request.urlopen(req) as response:
-                result = json.loads(response.read().decode())
-                state = result.get('data', {}).get('processing_info', {}).get('state')
-                if state == 'succeeded':
-                    print(f"✅ メディア処理完了")
-                    return
-                elif state == 'failed':
-                    print(f"❌ メディア処理失敗")
-                    return
-                print(f"⏳ 処理中... ({state})")
-        except Exception as e:
-            print(f"⚠️ ステータス確認エラー: {e}")
-            return
 
 
 def post_tweet(text, image_file=None):
