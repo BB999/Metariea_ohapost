@@ -11,8 +11,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OHAPOST_SCRIPT="$SCRIPT_DIR/../ohapost.sh"
 
 # ログ出力（タイムスタンプ付き）
+# 注意: 常にstderrに出力する。stdoutは関数の戻り値として使うため。
 log() {
-  echo "[$(TZ='Asia/Tokyo' date '+%Y-%m-%d %H:%M:%S')] $1"
+  echo "[$(TZ='Asia/Tokyo' date '+%Y-%m-%d %H:%M:%S')] $1" >&2
 }
 
 # macOS Keychainから設定を読み込み
