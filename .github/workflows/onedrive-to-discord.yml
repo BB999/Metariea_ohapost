@@ -1,11 +1,10 @@
 name: OneDrive to Discord
 
 on:
-  # 毎朝6:50（日本時間）に自動実行
-  schedule:
-    - cron: '50 21 * * *'  # UTC 21:50 = JST 6:50
-
-  # 手動実行も可能
+  # 毎朝7:00（日本時間）の起動指示は Cloudflare Worker（worker/）の
+  # Cron Trigger から workflow_dispatch で来る。
+  # GitHub の on:schedule はキュー登録が数時間ずれる（2026-08に最大+8h実測）
+  # ため、2026-08-29に外した。
   workflow_dispatch:
     inputs:
       debug:

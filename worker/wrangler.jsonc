@@ -1,0 +1,14 @@
+{
+  "name": "metariea-ohapost-trigger",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-29",
+
+  // 公開URLは要らない。cronからしか動かさない。
+  "workers_dev": false,
+
+  // wrangler tail でログを追えるようにしておく。
+  "observability": { "enabled": true },
+
+  // UTC 22:00 = JST 7:00。Cloudflareのcronは常にUTCで、TZ指定はできない。
+  "triggers": { "crons": ["0 22 * * *"] }
+}
